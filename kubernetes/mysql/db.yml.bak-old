@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: db-deployment
+  labels:
+    app: db-pod
+
+spec:
+  template:
+     metadata:
+       name: db-pod
+       labels:
+         app: db-pod
+     spec:
+       containers:
+         - name: db-pod
+           image: pawanitzone/mydb
+           env:
+             - name: MYSQL_ROOT_PASSWORD
+               valueFrom:
+                secretKeyRef:
+                 name: mysql-pass
+                 key: password
+
+           volumeMounts:
+           - mountPath: "/var/lib/mysql"
+             name: db-volume
+           ports:
+             - containerPort: 3306
+       volumes:
+        - name: db-volume
+          persistentVolumeClaim:
+            claimName: db-pvc-claim
+  replicas: 2
+  serviceName: db-service
+  selector:
+    matchLabels:
+      app: db-pod

@@ -1,0 +1,47 @@
+//Jenkinsfile for GKE cluster deployment 
+pipeline {
+  agent any
+    environment {
+        PROJECT_ID = 'essential-smoke-274903'
+        LOCATION = 'us-central1-c'
+        CREDENTIALS_ID = 'gkeweb'
+        CLUSTER_NAME = 'hirelab'
+                  
+    }
+  stages {
+    stage('Docker Build') {
+      steps {
+        sh "docker build -t pawanitzone/mydb:${env.BUILD_NUMBER} mysql/."
+      }
+    }
+    stage('Docker Push') {
+      steps {
+        withCredentials([usernamePassword(credentialsId: 'dockerHubUser', passwordVariable: 'dockerHubPassword', usernameVariable: 'dockerHubUser')]) {
+          sh "docker login -u ${env.dockerHubUser} -p ${env.dockerHubPassword}"
+          sh "docker push pawanitzone/mydb:${env.BUILD_NUMBER}"
+        }
+      }
+    }
+    stage('Docker Remove Image') {
+      steps {
+        sh "docker rmi pawanitzone/mydb:${env.BUILD_NUMBER}"
+      }
+    }
+    
+    
+    stage('Deploy to GKE') {
+       steps{  
+	  step([$class: 'KubernetesEngineBuilder', projectId: env.PROJECT_ID, clusterName: env.CLUSTER_NAME, location: env.LOCATION, manifestPattern: 'mysql/secret.yml', credentialsId: env.CREDENTIALS_ID, verifyDeployments: true])
+	       step([$class: 'KubernetesEngineBuilder', projectId: env.PROJECT_ID, clusterName: env.CLUSTER_NAME, location: env.LOCATION, manifestPattern: 'mysql/mysql-configmap.yml', credentialsId: env.CREDENTIALS_ID, verifyDeployments: true])
+	       step([$class: 'KubernetesEngineBuilder', projectId: env.PROJECT_ID, clusterName: env.CLUSTER_NAME, location: env.LOCATION, manifestPattern: 'mysql/db-pv.yml', credentialsId: env.CREDENTIALS_ID, verifyDeployments: true])
+		  step([$class: 'KubernetesEngineBuilder', projectId: env.PROJECT_ID, clusterName: env.CLUSTER_NAME, location: env.LOCATION, manifestPattern: 'mysql/db-pvc.yml', credentialsId: env.CREDENTIALS_ID, verifyDeployments: true])
+		  step([$class: 'KubernetesEngineBuilder', projectId: env.PROJECT_ID, clusterName: env.CLUSTER_NAME, location: env.LOCATION, manifestPattern: 'mysql/db-service.yml', credentialsId: env.CREDENTIALS_ID, verifyDeployments: true])
+		  sh "sed -i 's/mydb/mydb:${env.BUILD_ID}/g' mysql/db.yml"
+		  step([$class: 'KubernetesEngineBuilder', projectId: env.PROJECT_ID, clusterName: env.CLUSTER_NAME, location: env.LOCATION, manifestPattern: 'mysql/db.yml', credentialsId: env.CREDENTIALS_ID, verifyDeployments: true])
+       }
+      }
+  }
+}
+
+
+
